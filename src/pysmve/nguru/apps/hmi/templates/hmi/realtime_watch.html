@@ -1,46 +1,58 @@
 {% extends "base.html" %}
 {% load static %}
+{% load i18n %}
+
 
 {% block extraheader %}
-<link rel="stylesheet" href="{% static "jqGrid/css/ui.jqgrid.css" %}">
+    <link rel="stylesheet" href="{% static "jqGrid/css/ui.jqgrid.css" %}">
+    <link rel="stylesheet" href="{% static "hmi/css/realtime_watch.css" %}">
 {% endblock %}
 
 
 {% block content %}
 <div id="tabs">
     <ul>
-        <li><a href="#tab-real-time">Tiempo Real</a></li>
-        <li><a href="#tab-alarmas">Alarmas</a></li>
-        <li><a href="#tab-configuracion">Configuración</a></li>
-        <li><a href="#tab-volver">Volver</a></li>
+        <li><a href="#tab-real-time">{% trans "Real time" %}</a></li>
+        <li><a href="#tab-alarmas">{% trans "Events" %}</a></li>
     </ul>
     <div id="tab-real-time">
-        <div id="svg" style="height: {{ svg.height }}px; width: {{ svg.width }}px">
+        <div class="map-controls" style="font-size: x-small;">
+            <!-- Small button group -->
+            <div class="btn-group">
+              <button class="btn" id="jump_to_upper_screen" disabled='disabled'>
+                &uarr; Pantalla Superior</button>
+              <button class="btn dropdown-toggle" data-toggle="dropdown">
+                <span class="caret"></span>
+              </button>
+              <ul class="dropdown-menu">
+                <!-- dropdown menu links -->
+                <li><a href="#" id="update_toggle">Activar/Desactivar refresco</a></li>
+              </ul>
+            </div>
+        </div>
+        <br/>
+        <!-- SVG will be loaded here -->
+        <div id="svg" class="svg-container loading">
         </div>
         <div>
             <table id="mini-alarm" style="width: 100%;">
             </table>
+            <!--div style="padding-top: 15px;">
+                <a id="update_toggle" href="#">Update</a>
+            </div-->
         </div>
     </div>
     <div id="tab-alarmas">
+        <form action="" id="alarm_filter_form" class="form-inline" role="form">
+            <input type="text" name="timestamp__gte" class="date" placeholder="{% trans "Date after"%}">
+            <input type="text" name="timestamp__lte" class="date" placeholder="{% trans "Date before"%}">
+            <input type="text" name="di__tag__istartswith" placeholder="{% trans "Tag"%}">
+            <button class="btn" type="submit" name="submit">Filtrar</button>
+            <button class="btn" type="submit" name="reset">Limpiar</button>
+
+        </form>
         <table id="alarm-grid"></table>
-
-    </div>
-    <div id="tab-configuracion">
-        {# Configuración #}
-        <div class="btn-group" data-toggle="buttons-checkbox">
-            <button type="button" class="btn btn-primary">Sonido</button>
-        </div>
-
-
-        <h3>Intervalo de actualización</h3>
-        <p>
-            <div id="SMVE-update-interval" style="width: 500px; height: 10px;"/>
-            </div>
-        </p>
-        <div class="alert alert-info">
-            Refresco de interfase de tiempo real: <strong id="update_interval">1000</strong> milisegundos.
-        </div>
+        <div id="alarm_pager"></div>
 
     </div>
     <div id="tab-volver" class="volver"></div>
@@ -70,26 +82,30 @@
     <script src="{% static "jqGrid/js/JsonXml.js" %}"></script>
     <script src="{% static "jqGrid/js/grid.jqueryui.js" %}"></script>
     <script src="{% static "jqGrid/js/grid.filter.js" %}"></script>
-    <!-- jQuery SVG -->
-    <script type="text/javascript" src="{% static "jquery.svg/jquery.svg.js" %}"></script>
-    <script type="text/javascript" src="{% static "jquery.svg/jquery.svganim.js" %}"></script>
-    <script type="text/javascript" src="{% static "jquery.svg/jquery.svgdom.js" %}"></script>
-    <script type="text/javascript" src="{% static "jquery.svg/jquery.svgfilter.js" %}"></script>
-    <script type="text/javascript" src="{% static "jquery.svg/jquery.svggraph.js" %}"></script>
-    <script type="text/javascript" src="{% static "jquery.svg/jquery.svgplot.js" %}"></script>
-    <script type="text/javascript" src="{% static "jquery.svg/jquery.svg.js" %}"></script>
+
+    <script type="text/javascript" src="{% static "bower_components/d3/d3.min.js" %}"></script>
+    {% load jsutils %}
     <script type="text/javascript">
-        // Espacio de nombres global
+        // Global namespace
         if (typeof(SMVE) == 'undefined') {
             SMVE = {};
         }
         jQuery.extend(SMVE, {
-            svgURL: "{{ svg.svg.url }}",
-            svg_pk: "/hmi/ajax_update/{{ svg.pk }}/",
-            update: true
+            update: true,
+            perms: {% user_perm_array %} {# permission dump #}
         });
 
     </script>
+    <script type="text/javascript"
+    src="{% static "js/jquery-ui-1.10.0.custom/js/jquery.ui.datepicker-es.js" %}"></script>
+    <script type="text/javascript" src="{% static "js/string-format.js" %}"></script>
+    <script type="text/javascript" src="{% static "js/xdate.js" %}"></script>
+    <script type="text/javascript" src="{% static "hmi/js/eztimer.js" %}"></script>
+    <script type="text/javascript" src="{% static "hmi/js/jqobjectools.js" %}"></script>
+    <script type="text/javascript" src="{% static "hmi/js/queryobj.js" %}"></script>
+    <script type="text/javascript" src="{% static "hmi/js/tastyjqgrid.js" %}"></script>
+    <script type="text/javascript" src="{% static "hmi/js/tastypie.js" %}"></script>
+    <!-- Main code -->
     <script type="text/javascript" src="{% static "hmi/js/realtime_watch.js" %}"></script>
 
 {% endblock endscripts %}

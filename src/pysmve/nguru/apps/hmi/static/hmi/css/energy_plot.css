@@ -1,0 +1,9 @@
+
+#id_form_fields_hide {
+    display: none;
+}
+
+
+#plot svg {
+    min-height: 400px;
+}

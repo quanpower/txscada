@@ -1,0 +1,24 @@
+language: python
+python:
+    - "2.7"
+services: postgresql
+
+before_script:
+      - psql -c "CREATE DATABASE travisdb;" -U postgres
+
+cache:
+  directories:
+    - .pip_download_cache
+    - "$HOME/virtualenv"
+    - "$HOME/.cache"
+
+before_install:
+    - pip install -U pip setuptools
+
+install:
+    - pip install -r src/pysmve/setup/requirements/test.txt
+
+script: ./travis_run.sh
+
+after_success:
+    - coveralls

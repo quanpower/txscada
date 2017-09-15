@@ -1,0 +1,88 @@
+*.pyc
+.*
+nohup*
+*~
+*.sqlite
+*.db
+*.log
+*.part
+src/pysmve/nguru/nguru/settings/local_settings.py
+src/pysmve/salida.pdf
+src/pysmve/salida.py
+doc/2013/europython
+doc/documentacion_smve
+doc/2013/mapas/
+doc/2013/scipyconar-2013/
+
+src/pysmve/doc
+src/pysmve/nguru/media/*
+src/pysmve/fabsettings.py
+src/pysmve/*.pdf
+src/pysmve/setup
+
+
+
+.*
+*.o
+*.out
+*.log*
+*.dmp
+*.sql
+
+
+standup.txt
+worklog.*
+
+
+# Recomendaciones de GitHub
+# Compiled source #
+###################
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+
+# Packages #
+############
+# it's better to unpack these files and commit the raw source
+# git has its own built in compression methods
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# Logs and databases #
+######################
+*.log
+*.sql
+*.sqlite
+
+# OS generated files #
+######################
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+src/pysmve/nguru/static/bower_components/
+doc/2013/descripcion.md
+src/pysmve/Untitled0.ipynb
+doc/2013/Twisted-v5.doc
+doc/2013/SCyT-MicroCNet2-v6 FINAL.doc
+doc/2013/Modelo-WICC-2014.doc
+doc/2013/WICC2014SMVEConstruct.docx
+doc/2013/WICC2014SMVEConstruct.rtf
+doc/2013/defo_wicc_2014.bib
+doc/2013/screenshots/
+src/pysmve/nguru/static/media/
+
+# Scripts (deployment dirs)
+scripts

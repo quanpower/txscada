@@ -1,165 +1,146 @@
 # encoding: utf-8
 
-from twisted.internet import protocol
-from logging import getLogger
+from __future__ import print_function
+
+from copy import copy
+import logging
+import random
+import os
+
+from ..constructs import upperhexstr
+from protocols.constants import commands
 from construct import Container
 from construct.core import FieldError
-from ..constructs import (MaraFrame, )
-# from protocols.constants import MAX_SEQ, MIN_SEQ
-# from twisted.internet.task import LoopingCall
-# from twisted.internet.threads import deferToThread
-# from ..utils.bitfield import bitfield
-from protocols.constructs import Event
-from datetime import datetime
-from ..constructs import upperhexstr, dtime2dict
-from copy import copy
-import random
+from protocols.constructs import MaraFrame  # Event
+from twisted.internet import protocol
+from protocols.constructs.structs import hexstr2buffer
+import logging
 
-logger = getLogger(__name__)
+random.seed(os.getpid())
 
-#===============================================================================
-# COMaster emulation
-#===============================================================================
+
+def random_bytes(count):
+    """
+    Mara aware value generator. Creates the Mara offset and values
+    :returns (offset, data)
+    """
+    return (count+1, [random.randrange(0, 0xFF) for x in xrange(count)])
+
+
+def random_words(count):
+    """
+    Mara aware value generator. Creates the Mara offset and values
+    :returns (offset, data)
+    """
+    return ((count*2)+1, [random.randrange(0, 0xFFFF) for x in range(count)])
 
 
 class MaraServer(protocol.Protocol):
-    '''
+    """
     Works as COMaster development board
     It replies commands 0x10 based on the definition
     in the comaster instance (a DB table).
-    '''
-    comaster = None
-
-    def __init__(self):
-        """Crea un protocolo que emula a un COMaster"""
-        self.input = Container()
-        self.output = Container()
+    """
 
     def connectionMade(self,):
-        """docstring for connectionMade"""
-        # from ipdb import set_trace; set_trace()
-        logger.debug("Conection made to %s:%s" % self.transport.client)
+        self.logger.debug("Conection made to %s:%s" % self.transport.client)
+        self.input = Container()
+        self.output = None
+        self.last_seq = None
+        self.last_peh = None
+        self.peh_count = 0
+
+    def sendCotainer(self, container):
+        """Convenience method for publishing when data is sent"""
+        assert isinstance(container, Container)
+        data = self.construct.build(container)
+        self.logger.info("Reponding -> %s", upperhexstr(data))
+        self.transport.write(data)
 
     def dataReceived(self, data):
-        """Recepción de datos"""
         try:
             self.input = MaraFrame.parse(data)
+            self.maraPackageReceived()
         except FieldError:
             # If the server has no data, it does not matter
-            logger.warn("Error de pareso: %s" % upperhexstr(data))
-        self.maraPackageReceived()
+            self.input = None
+            self.logger.warn("Error de pareso: %s" % upperhexstr(data))
 
     def maraPackageReceived(self):
         """Note: Input holds input package parse results"""
         if self.input.command == 0x10:
             # Response for command 0x10
-            print "Responding Mara Frame from: %s" % self.transport
-            self.transport.write(self.makeResponse10())
+            self.logger.info("Responding Mara Frame from: %s", self.transport)
+            if self.input.sequence == self.last_seq and self.output:
+                self.logger.debug("Sending same package!")
+            else:
+                self.last_seq = self.input.sequence
+                self.output = self.buildPollResponse()
+            self.sendCotainer(self.output)
+        elif self.input.command == commands.PEH.value:
+
+            self.logger.info("PEH: %s", self.input.peh)
         else:
-            print "Not responding to package %x" % self.input.command
+            self.logger.warning("Not responding to package %x", self.input.command)
 
-    def makeResponse10(self):
-        self.output = copy(self.input)
-        # Swap Source by Destination
-        self.output.source, self.output.dest = self.output.dest, self.output.source
-        cant_ieds = 5
+    def buildPollResponse(self):
+        """It should reassemble what the COMaster does"""
 
-        svs = self.createSystemVariables(cant_ieds)
+        output = copy(self.input)
+        # exchange input
+        output.source, output.dest = self.input.dest, self.input.source
+        # show current squence number
+        self.logger.info("Sequence: %d", self.input.sequence)
 
-        ais = [random.randrange(0, 254) for _ in xrange(9)]
-        dis = self.createDIs(ieds=1, ports=3, port_width=16)
-
-        events = self.createDigitalEvents(1)
-        events.extend(self.createEnergyEvents(1))
-
-        self.output.payload_10 = Container(
-            # VarSys
-            canvarsys=self.length(svs),
-            varsys=svs,
-
-            candis=self.length(dis),
+        canvarsys, varsys = random_bytes(60)
+        candis, dis = random_words(12)
+        canais, ais = random_words(22)
+        output.payload_10 = Container(
+            canvarsys=canvarsys,
+            varsys=varsys,
+            candis=candis,
             dis=dis,
-
-            canais=self.length(ais),
+            canais=canais,
             ais=ais,
-
-            canevs=len(events) * 10 + 1,
-            event=events,
+            event=[],
+            canevs=1,
         )
-        from pprint import pprint
-        pprint(self.output)
 
-        return MaraFrame.build(self.output)
-
-    @staticmethod
-    def length(elements):
-        '''Length for variables (DI, SV, AI)'''
-        return len(elements) * 2 + 1
-
-    def createSystemVariables(self, cant_ieds):
-        '''Emula Variables de sistema'''
-        base = [0xaabb, 0xccdd, 0xeeff]
-        output = []
-        for i in range(cant_ieds):
-            output.extend(base)
+        #if random.choice((True, False)):
+        #    output.dest = random.randrange(1, 254)
         return output
 
-    def createDIs(self, ieds=1, ports=3, port_width=16, ):
-        '''Emula digital inputs'''
-        output = []
-        for ied in range(ieds):
-            for port in range(ports):
-                output.extend([random.randrange(0, 2 ** port_width)])
-        return output
+    def sendFixedRespose(self):
 
-    def connectionLost(self, reason):
-        print "Conexion con %s:%s terminada" % self.transport.client
+        bad_data = (
+            'FE 08 0A 01 06 10 F1 E6 19 16 2D 2A 00 40 01 A4 50 00 00 00 00 00 00 00 00'
+            '00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00'
+            '00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00'
+            '00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00'
+            '00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00'
+            '00 00 00 00 00 00 00 00 00 00 00 00 00 00 00'
+        )
 
-    def createDigitalEvents(self, qty=1, ports=3, port_width=16):
-        output = []
-        for i in range(qty):
-            ev = Container(evtype="DIGITAL", q=0,
-                               addr485=1, # Siempre es el 1
-                               bit=random.randrange(1,16),
-                               port=random.randrange(1,3),
-                               status=random.randrange(0, 1),
-                               # Timestamp bytes
-                               timestamp=datetime.now()
-                               )
+        self.transport.write(hexstr2buffer(bad_data))
 
-            try:
-                Event.build(ev)
-            except Exception, e:
-                print "Error construyendo evento", e
-            else:
-                print "OK"
-                output.append(ev)
-        return output
 
-    def createEnergyEvents(self, qty=1):
-        output = []
-        for i in range(qty):
-
-            ev = Container()
-            ev.evtype = "ENERGY"
-            ev.addr485 = 1
-            ev.idle = 0
-            ev.code = 1
-            ev.channel = 0
-            ev.timestamp = datetime.now()
-            ev.value = 1 << 16
-            ev.hnn = 0
-            ev.q = 0
-            try:
-                Event.build(ev)
-            except Exception:
-                print "Error creando energía"
-            else:
-                print "OK"
-                output.append(ev)
-        return output
-
+class ServerLogAdapter(logging.LoggerAdapter):
+    def process(self, msg, kwargs):
+        return  '[%s] %s' % ("SERVER", msg), kwargs
 
 
 class MaraServerFactory(protocol.Factory):
     protocol = MaraServer
+
+    def __init__(self, logger=None):
+        if not logger:
+            logger = logging.getLogger('')
+        self.logger = ServerLogAdapter(logger, {})
+        self.logger.info("Server Factory created.")
+
+    def buildProtocol(self, addr):
+        self.logger.info("Building protocol for %s", addr)
+        proto = protocol.Factory.buildProtocol(self, addr)
+        proto.construct = MaraFrame
+        proto.logger = self.logger
+        return proto

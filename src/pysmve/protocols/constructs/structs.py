@@ -5,7 +5,7 @@
 from construct import *
 from datetime import datetime
 from ..utils.checksum import make_cs_bigendian
-from .. import constants
+from ..constants import frame, sequence
 from operator import add
 from struct import pack
 
@@ -13,19 +13,19 @@ from struct import pack
 # Mara protocol SubConstructs
 #===============================================================================
 
-TCD = BitStruct('TCD',
-                Enum(
-                BitField("evtype", 2),
-                DIGITAL=0,
-                ENERGY=1,
-                # Evento no definido aún
-                IDLE=2,
-                # Eventos de diagnóstico
-                COMSYS=3,
-                ),
-                BitField("q", 2),
-                BitField("addr485", 4),
-                )
+TCD = BitStruct(
+    'TCD',
+    Enum(BitField("evtype", 2),
+         DIGITAL=0,
+         ENERGY=1,
+         # Evento no definido aún
+         IDLE=2,
+         # Eventos de diagnóstico
+         COMSYS=3,
+         ),
+    BitField("q", 2),
+    BitField("addr485", 4),
+)
 
 #=========================================================================================
 # Old Bit Port Status
@@ -55,16 +55,15 @@ CodeCan = BitStruct('idlecan',
 
 # Segudno byte del evento IDLE
 CodeIdle = BitStruct('codeidle',
-                    BitField('idle', 2),
-                    BitField('code', 3),
-                    BitField('idle2', 3)
-                    )
+                     BitField('idle', 2),
+                     BitField('code', 3),
+                     BitField('idle2', 3),
+                     )
 
 # Segundo byte del evento de diangóstico
 CodeMotiv = BitStruct('codemotiv',
-                    BitField('code', 4),
-                    BitField('motiv', 4),
-                    )
+                      BitField('motiv', 8),
+                      )
 
 TimerTicks = Struct('ticks',
                     # UBInt8('cseg'),
@@ -86,20 +85,21 @@ DateTime = Struct('datetime',
                   UBInt8('minute'),
                   UBInt8('second'),
                   )
+
 GenericTimeStamp = Struct('generic_time_stamp',
-    Byte('year'),
-    Byte('month'),
-    Byte('day'),
-    Byte('hour'),
-    Byte('minute'),
-)
+                          Byte('year'),
+                          Byte('month'),
+                          Byte('day'),
+                          Byte('hour'),
+                          Byte('minute'),
+                          )
 
 
 GenericEventTail = Struct('generic_event_tail',
-                                Embed(GenericTimeStamp),
-                                Byte('second'),
-                                UBInt16('fraction')
-                                )
+                          Embed(GenericTimeStamp),
+                          Byte('second'),
+                          UBInt16('fraction'),
+                          )
 
 SECONDS_FRACTION = 2 ** 15
 
@@ -109,10 +109,10 @@ def container_to_datetime(obj):
     year, month, day, hour, minute, second, faction -> datetime instance
     Función auxiliar debido a que los adapters no funcionan como tales cuando están
     embebidos y para no crear una función extra'''
-    fraction = obj.fraction % SECONDS_FRACTION
+    fraction = getattr(obj, 'fraction', 0) % SECONDS_FRACTION
     microseconds = float(fraction) / SECONDS_FRACTION * 1000000
     return datetime(obj.year + 2000, obj.month, obj.day, obj.hour, obj.minute,
-                        obj.second, int(microseconds))
+                    getattr(obj, 'second', 0), int(microseconds))
 
 
 class GenericEventTailAdapter(Adapter):
@@ -128,9 +128,9 @@ class GenericEventTailAdapter(Adapter):
                          fraction=int(fraction))
 
 EnergyEventTail = Struct('energy_event_tail',
-    Embed(GenericTimeStamp),
-    Array(3, Byte('data'))
-)
+                         Embed(GenericTimeStamp),
+                         Array(3, Byte('data')),
+                         )
 
 
 class EnergyEventTailAdapter(Adapter):
@@ -150,15 +150,17 @@ class EnergyEventTailAdapter(Adapter):
 
 
 Event = Struct("event",
-    Embed(TCD),
-    Switch("evdetail", lambda ctx: ctx.evtype,
-        {
-            "DIGITAL": Embed(EPB),
-            "ENERGY":  Embed(CodeCan),
-            "IDLE":    Embed(CodeIdle),
-            "COMSYS":  Embed(CodeMotiv),
-        }
-    ),
+               Embed(TCD),
+               Switch("evdetail",
+                      lambda ctx: ctx.evtype,
+                      {
+                        "DIGITAL": Embed(EPB),
+                        "ENERGY":  Embed(CodeCan),
+                        "IDLE":    Embed(CodeIdle),
+                        "COMSYS":  Embed(CodeMotiv),
+                       }
+                ),
+
     Switch('tail', lambda ctx: ctx.evtype, {
         'ENERGY':   Embed(EnergyEventTailAdapter(EnergyEventTail)),
         'DIGITAL':  Embed(GenericEventTailAdapter(GenericEventTail)),
@@ -173,7 +175,7 @@ Event = Struct("event",
 #===============================================================================
 Payload_10 = Struct("payload_10",
     ULInt8('canvarsys'),
-    Array(lambda ctx: ctx.canvarsys / 2, ULInt16('varsys')),
+    Array(lambda ctx: ctx.canvarsys -1, UBInt8('varsys')),
     ULInt8('candis'),
     Array(lambda ctx: ctx.candis / 2, ULInt16('dis')),
     ULInt8('canais'),
@@ -273,7 +275,7 @@ class BaseMaraStruct(Struct):
     def _build(self, obj, stream, context):
         '''Builds frame'''
         # This code ain't no pythonic, shall make it better some time...
-        obj.setdefault('sof', constants.SOF)
+        obj.setdefault('sof', frame.SOF.value)
         obj.setdefault('length', 0)  # Don't care right now
         obj.setdefault('bcc', 0)    # Don't care right now
         #=================================================================================
@@ -299,27 +301,29 @@ class BaseMaraStruct(Struct):
     @classmethod
     def pretty_print(cls, container, show_header=True, show_bcc=True):
         '''Pretty printing'''
-        format_frame(container, as_hex_string=False, show_header=show_header, show_bcc=show_bcc)
+        format_frame(container, as_hex_string=False, show_header=show_header,
+                     show_bcc=show_bcc)
 
 
-MaraFrame = BaseMaraStruct('Mara',
-            ULInt8('sof'),
-            ULInt8('length'),
-            ULInt8('dest'),
-            ULInt8('source'),
-            ULInt8('sequence'),
-            ULInt8('command'),
-            #Probe(),
+MaraFrame = BaseMaraStruct(
+    'Mara',
+    ULInt8('sof'),
+    ULInt8('length'),
+    ULInt8('dest'),
+    ULInt8('source'),
+    ULInt8('sequence'),
+    ULInt8('command'),
+    # Probe(),
 
-            If(lambda ctx: ctx.command == 0x10,
-               #Probe(),
-               Optional(Payload_10),
+    If(lambda ctx: ctx.command == 0x10,
+       # Probe(),
+       Optional(Payload_10),
+    ),
 
-            ),
-            If(lambda ctx: ctx.command == 0x12,
-               PEHAdapter(Payload_PEH),
-            ),
-            ULInt16('bcc')
+    If(lambda ctx: ctx.command == 0x12,
+       PEHAdapter(Payload_PEH),
+    ),
+    ULInt16('bcc')
 )
 
 

@@ -1,12 +1,16 @@
 # Django settings for nguru project.
 import sys
+import os
 from os.path import abspath, dirname, join
+
 
 SETTINGS_PATH = dirname(__file__)  # Settings es un modulo
 PROJECT_ROOT = abspath(join(SETTINGS_PATH, '../..'))
 
-DEBUG = True
+DEBUG = False
 TEMPLATE_DEBUG = DEBUG
+
+from django.utils.translation import ugettext_lazy as _
 
 ADMINS = (
     # ('Your Name', 'your_email@example.com'),
@@ -14,16 +18,6 @@ ADMINS = (
 
 MANAGERS = ADMINS
 
-# DATABASES = {
-#    'default': {
-#        'ENGINE': 'django.db.backends.postgresql_psycopg2', # Add 'postgresql_psycopg2', 'mysql', 'sqlite3' or 'oracle'.
-#        'NAME': 'txscada',                      # Or path to database file if using sqlite3.
-#        'USER': '',                      # Not used with sqlite3.
-#        'PASSWORD': '',                  # Not used with sqlite3.
-#        'HOST': '',                      # Set to empty string for localhost. Not used with sqlite3.
-#        'PORT': '',                      # Set to empty string for default. Not used with sqlite3.
-#    }
-#}
 
 # Local time zone for this installation. Choices can be found here:
 # http://en.wikipedia.org/wiki/List_of_tz_zones_by_name
@@ -33,12 +27,10 @@ TIME_ZONE = 'America/Argentina/Buenos_Aires'
 
 # Language code for this installation. All choices can be found here:
 # http://www.i18nguy.com/unicode/language-identifiers.html
-LANGUAGE_CODE = 'es-ar'
+LANGUAGE_CODE = 'es'
 
 SITE_ID = 1
 
-
-GRAPPELLI_ADMIN_TITLE = "S.M.V.E."
 
 # If you set this to False, Django will make some optimizations so as not
 # to load the internationalization machinery.
@@ -53,7 +45,7 @@ USE_TZ = False
 
 # Absolute filesystem path to the directory that will hold user-uploaded files.
 # Example: "/home/media/media.lawrence.com/media/"
-MEDIA_ROOT = join(PROJECT_ROOT, 'media')
+MEDIA_ROOT = join(PROJECT_ROOT, 'static', 'media')
 
 
 # Absolute path to the directory static files should be collected to.
@@ -62,22 +54,19 @@ MEDIA_ROOT = join(PROJECT_ROOT, 'media')
 # Example: "/home/media/media.lawrence.com/static/"
 STATIC_ROOT = join(PROJECT_ROOT, 'static-content')
 
+BASE_URL = 'smve/'
 
 # URL prefix for static files.
 # Example: "http://media.lawrence.com/static/"
-STATIC_URL = '/static/'
+STATIC_URL = '/{}static/'.format(BASE_URL)
 
 # URL that handles the media served from MEDIA_ROOT. Make sure to use a
 # trailing slash.
 # Examples: "http://media.lawrence.com/media/", "http://example.com/media/"
-MEDIA_URL = '/media/'
+MEDIA_URL = STATIC_URL + 'media/'
 
 # Additional locations of static files
 STATICFILES_DIRS = (
-    # Put strings here, like "/home/html/static" or "C:/www/django/static".
-    # Always use forward slashes, even on Windows.
-    # Don't forget to use absolute paths, not relative paths.
-    #join(PROJECT_ROOT, 'static-conent'),
     'static',
     join(PROJECT_ROOT, 'static'),
 )
@@ -110,12 +99,18 @@ MIDDLEWARE_CLASSES = (
     # Uncomment the next line for simple clickjacking protection:
     # 'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'debug_toolbar.middleware.DebugToolbarMiddleware',
+
 )
+
+MIDDLEWARE_CLASSES += 'dealer.contrib.django.staff.Middleware',
+
 
 ROOT_URLCONF = 'nguru.urls'
 
 # Python dotted path to the WSGI application used by Django's runserver.
 WSGI_APPLICATION = 'nguru.wsgi.application'
+if os.environ['DJANGO_SETTINGS_MODULE'].startswith('nguru.nguru'):
+    WSGI_APPLICATION = 'nguru.%s' % WSGI_APPLICATION
 
 TEMPLATE_DIRS = (
     # Put strings here, like "/home/html/django_templates" or "C:/www/django/templates".
@@ -125,11 +120,7 @@ TEMPLATE_DIRS = (
 )
 
 INSTALLED_APPS = (
-    # Django admin tools
-    #'admin_tools',
-    #'admin_tools.theming',
-    #'admin_tools.menu',
-    #'admin_tools.dashboard',
+    'adminactions',
     'crispy_forms',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -144,23 +135,38 @@ INSTALLED_APPS = (
     # Graphical Query Browser
 
     'django_extensions',
-    'django_socketio',
+    #'django_socketio',
     'debug_toolbar',
+    # Testing
     'django_nose',
 
+    # Core applications
     'apps.mara',
     'apps.hmi',
     'apps.api',
+    'apps.notifications',
 
-    'apps.research',
-
-    #'admin_bootstrap',
+    # Query by example
     'django_qbe',
     'django_qbe.savedqueries',
 
-    #'grappelli',
+    # Admin actions
+    'object_tools',
     'django.contrib.admin',
+
+    # URLs in JS
+    'django_js_reverse',
+    # Django Mailer
+    'mailer',
+
+    # Admin editable configration
+    'constance',
+    'constance.backends.database',
+
+    # Error reporting
+    'raven.contrib.django.raven_compat',
 )
+
 
 # A sample logging configuration. The only tangible logging
 # performed by this configuration is to send an email to
@@ -173,10 +179,10 @@ LOGGING = {
 
     'formatters': {
         'verbose': {
-            'format': '%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d %(message)s'
+            'format': '%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d %(message)s'  # noqa
         },
         'simple': {
-            'format': '%(levelname)s %(message)s'
+            'format': '%(asctime)s %(levelname)s %(message)s'
         },
     },
 
@@ -197,6 +203,11 @@ LOGGING = {
             'formatter': 'simple',
             'stream': sys.stdout
         },
+        'notification_handler': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+            'stream': sys.stderr,
+        }
     },
     'loggers': {
         'django.request': {
@@ -218,33 +229,103 @@ LOGGING = {
             'handlers': ['console', ],
             'level': 'DEBUG',
             'propagate': True
+        },
+        'excel_import': {
+            'handlers': ['console', ],
+            'level': 'DEBUG',
+            'propagate': True
+        },
+        'apps.notifications.utils': {
+            'handlers': ['notification_handler', ]
+        },
+        'apps.notifications.management.commands.send_sms_notifications': {
+            'handlers': ['notification_handler', ]
         }
     }
 }
 
 
-#=========================================================================================
+# ========================================================================================
 # Debug Toolbar
-#=========================================================================================
+# ========================================================================================
+
+def show_toolbar(request):
+    from constance import config
+    DEBUG_USERS = {u.strip() for u in config.DEBUG_USERS.split(',')}
+    if request.user.is_authenticated():
+        if request.user.username in DEBUG_USERS:
+            return True
+    return False
+
 
 DEBUG_TOOLBAR_CONFIG = {
     'INTERCEPT_REDIRECTS': False,
+    'SHOW_TOOLBAR_CALLBACK': show_toolbar,
 }
 
 
-TEST_RUNNER = 'django_nose.NoseTestSuiteRunner'
+LOCALE_PATHS = (
+    join(PROJECT_ROOT, 'conf/locale'),
+)
 
-NOSE_ARGS = [
-    #'--nologcapture', '--nocapture',
-    '--with-id', '--logging-clear-handlers',
-    '--with-progressive', '--progressive-function-color=1', '--progressive-bar-filled=2',
-    #'--with-noseprofhooks',
-    #'--cprofile-stats-erase',
-    #'--cprofile-stats-file=stats.stats',
-    #'--processes=8'
-]
+TIMESTAMP_FORMAT = '%Y-%m-%d %H:%M:%S.%f'
 
-#import warnings
-#warnings.filterwarnings(
-#        'error', r"DateTimeField received a naive datetime",
-#        warnings.RuntimeWarning, r'django\.db\.models\.fields')
+
+LOGIN_URL = '/smve/login/'
+
+LOGIN_REDIRECT_URL = '/' + BASE_URL
+
+
+TEMPLATE_CONTEXT_PROCESSORS = (
+    "django.contrib.auth.context_processors.auth",
+    "django.core.context_processors.debug",
+    "django.core.context_processors.i18n",
+    "django.core.context_processors.media",
+    "django.core.context_processors.static",
+    "django.core.context_processors.tz",
+    "django.contrib.messages.context_processors.messages",
+    "dealer.contrib.django.staff.context_processor",
+    "constance.context_processors.config",
+
+)
+
+
+AUTH_PROFILE_MODULE = 'hmi.UserProfile'
+
+# ========================================================================================
+# Constance configuration
+# ========================================================================================
+
+CONSTANCE_BACKEND = 'constance.backends.database.DatabaseBackend'
+
+email_template = '''Estimado
+Se ha producido un evento {{ event }} a
+las {{ event.timestamp|date:config.EVENT_DATE_FORMAT }}
+'''
+
+sms_template = '''Estimado
+Se ha producido un evento {{ event }} a las
+{{ event.timestamp|date:config.EVENT_DATE_FORMAT }}
+'''
+
+
+CONSTANCE_CONFIG = {
+    'DEBUG_USERS': ('nahuel', _('Users that have debug toolbar enabled')),
+    'TEMPLATE_EMAIL': (email_template, _('Email template.')),
+    'TEMPLATE_SMS': (sms_template, _('SMS template.')),
+    'EVENT_DATE_FORMAT': ('G:i:s.u d/m/Y', _('Format for date in SMS and email.')),
+    'ALARM_BEEP': (True, _('Beep on alarms')),
+    'ALARM_BEEP_VOLUME': (1.0, _('Beep volume. Float from 0.0 to 1.0.')),
+}
+
+# =======================================================================================
+# POLL SETTINGS
+# =======================================================================================
+
+MARA_CONSTRUCT = 'protocols.constructs.MaraFrame'
+POLL_PROTOCOL_FACTORY = 'protocols.mara.client.MaraPorotocolFactory'
+
+POLL_FRAME_HANDLERS = (
+    'apps.mara.handlers.DjangoORMMaraFrameHandler',
+    # 'apps.mara.handlers.AMQPPublishHandler',
+)

@@ -1,50 +1,74 @@
 {% extends "base.html" %}
 {% load static %}
-{% load crispy_forms_tags %}
+
+{% block extraheader %}
+    <link rel="stylesheet" href="{% static "bower_components/nvd3/nv.d3.css" %}">
+    <link rel="stylesheet" href="{% static "hmi/css/energy_plot.css" %}">
+{% endblock extraheader %}
 
 {% block content %}
-    <div>
+    <div class="row">
+        <div class="span6 toggleable">
+            <form action="">
+                <!-- Estación -->
+                <label class="control-label" for="id_comaster">Estación</label>
+                <select name="comaster" id="id_comaster">
+                    {% for comaster in comasters %}
+                        <option value="{{ comaster.pk }}">{{comaster.description}}</option>
+                    {% endfor %}
+                </select>
+                <label for="id_channel" class="control-label">Magnitud</label>
+                <select id="id_channel">
+                    <option value="0">Potencia Activa</option>
+                    <option value="1">Potencia Reactiva</option>
+                </select>
+                <div class="form-inline">
+                    <input type="text" id="id_date_from" class="datepicker input-small"
+                    placeholder="Desde"
+                    value="{{ today|date:"j/n/o" }}">
+                    <input type="text" id="id_date_to" class="datepicker input-small"
+                    placeholder="Hasta"
+                    value="{{ today|date:"j/n/o" }}">
+                </div>
+                <label for="id_ai" class="control-label">Medidor</label>
+                <select name="ai" id="id_ai" class="input-xxlarge">
+                    {% for ai in ais %}
+                        <option value="{{ai.pk}}"
+                            data-comaster-pk="{{ai.ied.co_master.pk}}"
+                            data-channel="{{ai.channel}}">
+                            {{ ai.description}}</option>
+                    {% endfor %}
+                </select>
+                            </form>
+            </div>
+            <div class="span3">
+                <div class="alert alert-success" id="max_energy_period">
+                    Sin información de demandas
+                </div>
+            </div>
 
-        {% crispy form form.helper %}
 
     </div>
-    <div id="chart">
+    <div class="well">
+
+    <button class="btn btn-primary" id="id_plot">Graficar</button>
+    <button class="btn" id="id_export">Exportar</button>
+    <button class="btn" id="id_form_fields_hide">Contraer</button>
+
     </div>
+
+    <div id="plot">
+        <svg></svg>
+    </div>
+
 {% endblock content %}
 
 {% block endscripts %}
-    <script type="text/javascript" src="{% static "js/jquery-ui-1.10.0.custom/js/jquery.ui.datepicker-es.js" %}"></script>
-    <script type="text/javascript" src="{% static "highcharts/js/highcharts.js" %}"></script>
-    <script type="text/javascript">
-        $('#id_date').datepicker();
-        new Highcharts.Chart({
-            chart: {
-                renderTo: "chart"
-            },
-            title: {
-                text: "Curva de potencia"
-            },
-            yAxis: {
-                title: {text:"KW/h - KVA/h"},
-
-            },
-            xAxis: {
-                type: 'datetime',
-                /*dateTimeLabelFormats: {
-                    month: '%e. %b',
-                    day: '%b %e',
-                    hour: '%b %e',
-                    year: '%b'
-                }*/
-                //, tickInterval: 24 * 3600 * 1000
-            },
-            series: [
-                // {
-                //     data: [[Date.UTC(2011, 4, 23), 194.0], [Date.UTC(2011, 4, 24), 195.00000000000003], [Date.UTC(2011, 4, 25), 192.00000000000003], ],
-                //     name: "Potencia Activa"
-                // }
-
-            ]
-        });
-    </script>
+    <script type="text/javascript" src="{% static "js/xdate.js" %}"></script>
+    <script type="text/javascript" src="{% static "js/errors.js" %}"></script>
+    <script type="text/javascript" src="{% static "hmi/js/queryobj.js" %}"></script>
+    <script type="text/javascript" src="{% static "bower_components/d3/d3.js" %}"></script>
+    <script type="text/javascript" src="{% static "bower_components/nvd3/nv.d3.js" %}"></script>
+    <script type="text/javascript" src="{% static "hmi/js/tastypie.js" %}"></script>
+    <script type="text/javascript" src="{% static "hmi/js/energy_plot.js" %}"></script>
 {% endblock endscripts %}

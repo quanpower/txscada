@@ -9,11 +9,28 @@
 {% endblock %}
 
 {% block content %}
+        <div class="row">
+            {% if message_text %}
+                <div class="alert alert-{{ message_class }}">
+                    {{ message_text }}
+                </div>
+            {% endif %}
+
+        </div>
         <div class="hero-unit">
-                <h2>Análisis de Tramas Mara</h2>
-                <p>Ingrese el frame a analizar en formato hexadecimal ASCII</p>
-                <textarea id="frame" style="width: 100%;"></textarea>
-                <p><a class="btn btn-primary btn-large" id="analizar">Analizar &raquo;</a></p>
+                <h2>Inserción manual de tramas Mara</h2>
+                <form action="" method="POST">
+
+                    {{ form }}
+
+                    <div class="form-group">
+
+                        <input type="submit" value="Enviar" class="btn btn-default">
+                        <input type="submit" class="btn"
+                        id="analize_frame_button" name="analizar" value="Analizar">
+                        <input type="reset" class="btn" value="Reset">
+                    </div>
+                </form>
             </div>
 {% endblock %}
 
@@ -53,7 +70,7 @@
         ]
     });
 
-    $('#analizar').click(function (){
+    $('#analize_frame_button').click(function (){
         var that = this;
         var value = frame.val();
         if ($(this).hasClass('disabled') || !value) {
